@@ -1,195 +1,65 @@
-# AuditReaper v2.5  
-**Automated Linux System Audit & Security Dashboard**
+﻿# AuditReaper
 
----
+AuditReaper is a Bash-based Linux system audit collector. It gathers host, account, network, firewall, package, service, filesystem, scheduled-task, log, shell-history, container, credential-pattern, and recent-file-change information into timestamped local reports. Optional deep mode invokes package-integrity and rootkit-checking utilities. It can generate a local HTML dashboard.
 
-## ⚡ Quick Start
-Run everything in one go:
-```bash
-sudo ./AuditReaper.sh --install-deps --full --yes
-```
-This installs missing dependencies, runs a deep audit, and generates an interactive HTML dashboard.
+Use it only on systems you own or are authorized to assess. Review [data inventory](docs/DATA_INVENTORY.md) and [security and privacy notes](docs/SECURITY_AND_PRIVACY.md) first: reports can contain sensitive host details, user activity, and credential-like strings.
 
----
+## Requirements
 
-## 📖 Description
-AuditReaper is a lightweight automated **Linux auditing framework** that collects critical system, security, and configuration data.  
-It outputs clean text and JSON reports, and builds an **interactive HTML dashboard** for visualizing results — all with a single command.
+- Linux with Bash and `jq`, `curl`, `ss`, `awk`, `sed`, `grep`, `find`, `stat`, `uname`, `date`, and `hostname`.
+- Root access is recommended for complete system visibility.
+- `python3` is needed for the dashboard. `--install-deps` uses apt/apt-get, updates package metadata, and installs packages.
+- Optional tools include `debsums`, `docker`, `podman`, `rkhunter`, `chkrootkit`, `netstat`, `getcap`, and `lsb_release`.
 
----
+## Quick start
 
-## 🧰 Installation
-Clone and make executable:
 ```bash
 git clone https://github.com/pred07/AuditReaper.git
 cd AuditReaper
 chmod +x AuditReaper.sh
+sudo ./AuditReaper.sh
 ```
-Optional dependency install:
+
+The script displays a consent notice and asks before collection. In non-interactive execution, the prompt is disabled by the implementation; use `--yes` only when collection is authorized and the output location is understood.
+
+## Options
+
+```text
+--install-deps  Update apt metadata and install the script's package list (root required)
+--yes           Skip the interactive consent prompt
+--full          Run additional package-integrity and rootkit checks
+--redact        Apply limited substitutions to selected collected text
+--no-html       Skip dashboard generation
+-v              Verbose mode
+-q              Quiet mode
+-h, --help      Show help
+```
+
+Example:
+
 ```bash
-sudo apt install -y jq curl awk sed grep find stat ss
+sudo ./AuditReaper.sh --full --redact
 ```
 
----
+The current CLI does not implement a custom output-directory option. Results are written under `AuditReaper-Results/<host>_<timestamp>/` beside the script, with a `.tar.gz` archive alongside. See [operations](docs/OPERATIONS.md) and [output reference](docs/OUTPUT_REFERENCE.md).
 
-## 🚀 Usage
+## Rebuild the dashboard
 
-### 🔹 Basic Audit
+From the repository directory, pass the existing results directory to the supplied helper:
+
 ```bash
-sudo ./AuditReaper.sh --yes
+./generate_dashboard.sh ./AuditReaper-Results/<host>_<timestamp>
 ```
 
-### 🔹 Full Deep Scan (with integrity & rootkit checks)
-```bash
-sudo ./AuditReaper.sh --full --yes
-```
+The helper expects `dashboard_template.html` in the current working directory and writes `audit_dashboard.html` into the selected results directory.
 
-### 🔹 Install Dependencies Automatically
-```bash
-sudo ./AuditReaper.sh --install-deps --yes
-```
+## Documentation
 
-### 🔹 Custom Output Directory
-```bash
-sudo ./AuditReaper.sh --output-dir ~/MyAudits --yes
-```
+- [Operations guide](docs/OPERATIONS.md)
+- [Data inventory](docs/DATA_INVENTORY.md)
+- [Output reference](docs/OUTPUT_REFERENCE.md)
+- [Security and privacy](docs/SECURITY_AND_PRIVACY.md)
 
-### 🔹 Skip Dashboard Generation
-```bash
-sudo ./AuditReaper.sh --no-html --yes
-```
+## Project status
 
-### 🔹 Redact Sensitive Data
-```bash
-sudo ./AuditReaper.sh --redact --yes
-```
-
-### 🔹 Verbose / Quiet Mode
-```bash
-sudo ./AuditReaper.sh -v        # Verbose
-sudo ./AuditReaper.sh -q --yes  # Quiet
-```
-
-### 🔹 Display Help Menu
-```bash
-sudo ./AuditReaper.sh --help
-```
-
----
-
-## 🧩 Help Command Output
-```
-============================================================
-  AuditReaper v2.4
-  Author: 0xbrijith | https://github.com/pred07/AuditReaper
-============================================================
-
-USAGE:
-  sudo ./AuditReaper.sh [OPTIONS]
-
-OPTIONS:
-  --install-deps       Install dependencies (apt)
-  --yes                Skip consent prompt (non-interactive)
-  --full               Run deep scan (debsums, rkhunter, chkrootkit)
-  --redact             Redact sensitive data in outputs
-  --no-html            Skip HTML dashboard generation
-  --output-dir DIR     Save results to custom directory
-  -v                   Verbose mode
-  -q                   Quiet mode
-  -h, --help           Show this help menu
-
-EXAMPLES:
-  sudo ./AuditReaper.sh --install-deps --yes
-  sudo ./AuditReaper.sh --full --yes --output-dir ~/AuditReaper-Results
-```
-
----
-
-## 📂 Output Structure
-```
-AuditReaper-Results/
-└── <host>_<timestamp>/
-    ├── sections/               # Per-module audit results
-    ├── data/
-    │   ├── audit_results.json  # Summary data
-    │   └── findings.json       # Findings list
-    ├── auditreaper_*.txt       # Combined text report
-    ├── audit_dashboard.html    # Visual dashboard
-    └── errors.log              # Error log (if any)
-```
-
----
-
-## 📊 Viewing the Dashboard
-```bash
-google-chrome --no-sandbox ~/AuditReaper-Results/<host>_<timestamp>/audit_dashboard.html
-```
-or
-```bash
-firefox ~/AuditReaper-Results/<host>_<timestamp>/audit_dashboard.html
-```
-> ⚠️ When running as **root**, Chrome requires the `--no-sandbox` flag.
-
----
-
-## ♻️ Rebuild Dashboard (No Rescan Needed)
-Use helper script:
-```bash
-sudo ./rebuild_dashboard.sh
-```
-Or rebuild manually:
-```bash
-cd ~/AuditReaper-Results/<host>_<timestamp>
-template=~/AuditReaper/dashboard_template.html
-audit_json=data/audit_results.json
-findings_json=data/findings.json
-out_html=~/AuditReports/audit_dashboard.html
-
-mkdir -p ~/AuditReports
-json_data=$(jq -c . "$audit_json")
-findings_data=$(jq -c . "$findings_json")
-
-cp "$template" "$out_html"
-sed -i "s|{{AUDIT_DATA}}|$json_data|g" "$out_html"
-sed -i "s|{{FINDINGS_DATA}}|$findings_data|g" "$out_html"
-
-google-chrome --no-sandbox "$out_html"
-```
-
----
-
-## 📦 Dependencies
-AuditReaper will install missing dependencies automatically when you run:
-```bash
-sudo ./AuditReaper.sh --install-deps --yes
-```
-
-**Core Packages:**  
-`jq`, `curl`, `awk`, `grep`, `sed`, `find`, `stat`, `ss`, `hostname`, `date`
-
-**Optional Tools:**  
-`debsums`, `docker`, `podman`, `rkhunter`, `chkrootkit`, `net-tools`, `libcap2-bin`
-
----
-
-## 🧠 Summary of Operation
-| Stage | Action |
-|-------|---------|
-| 1 | Collects audit data from the system |
-| 2 | Saves section reports and JSON |
-| 3 | Generates combined `.txt` report |
-| 4 | Builds interactive HTML dashboard |
-| 5 | Archives everything into `.tar.gz` |
-
----
-
-## 💡 Feedback & Improvements
-AuditReaper is open for improvement — feel free to **fork, modify, and enhance** it.  
-Suggestions, bug reports, and dashboard feature ideas are welcome.  
-Please open issues or pull requests on the repository to keep all updates transparent.
-
----
-
-## 📜 License
-MIT License © 2025  
-Developed by **0xbrijith**  
+This repository provides shell scripts and a dashboard template. Review the implementation and run it in a controlled environment before relying on findings. There is no automated test suite or CI workflow in the repository. Findings are indicators for human review, not certification or proof of compromise.
